@@ -62,3 +62,53 @@ curl -k -u admin:PASSWORD "https://localhost:9200/wazuh-alerts-*/_search?q=rule.
 
 This represents a real detection gap in the default ruleset for fast, low-volume 
 brute-force attempts.
+
+### 4. Closing the Gap: Custom Detection Rule
+
+To address the gap left by rule 5720, a custom correlation rule was written and added 
+to `/var/ossec/etc/rules/local_rules.xml`:
+
+```xml
+<rule id="100002" level="10" frequency="4" timeframe="60">
+  <if_matched_sid>5760</if_matched_sid>
+  <same_source_ip />
+  <description>SSH brute force attempt: multiple authentication failures from the same source IP.</description>
+  <mitre>
+    <id>T1110</id>
+  </mitre>
+  <group>authentication_failures,pci_dss_10.2.4,pci_dss_10.2.5,</group>
+</rule>
+```
+
+**Logic:** if rule 5760 (SSH authentication failure) fires 4 or more times from the 
+same source IP within a 60-second window, raise a level 10 alert and tag it to 
+**MITRE ATT&CK T1110 (Brute Force)**.
+
+### 5. Verification
+After restarting the Wazuh manager and re-running the Hydra attack, rule 100002 fired 
+correctly, correlating 4 failed attempts and producing a single high-severity alert:
+
+![Custom rule 100002 firing](screenshots/rule-100002-alert.png)
+
+**Key fields from the alert:**
+```json
+"rule": {
+  "id": "100002",
+  "level": 10,
+  "frequency": 4,
+  "description": "SSH brute force attempt: multiple authentication failures from the same source IP.",
+  "mitre": {
+    "id": ["T1110"],
+    "technique": ["Brute Force"],
+    "tactic": ["Credential Access"]
+  }
+},
+"data": {
+  "srcip": "192.168.10.10",
+  "dstuser": "marlinspike",
+  "srcport": "33156"
+}
+```
+
+This confirms the custom rule correctly identifies brute-force activity that the 
+default ruleset missed.
