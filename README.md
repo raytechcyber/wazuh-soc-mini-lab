@@ -88,7 +88,8 @@ same source IP within a 60-second window, raise a level 10 alert and tag it to
 After restarting the Wazuh manager and re-running the Hydra attack, rule 100002 fired 
 correctly, correlating 4 failed attempts and producing a single high-severity alert:
 
-![Custom rule 100002 firing](screenshots/rule-100002-alert.png)
+![Custom rule 100002 firing - part 1](screenshots/rule-100002-alert-1.png)
+![Custom rule 100002 firing - part 2](screenshots/rule-100002-alert-2.png)
 
 **Key fields from the alert:**
 ```json
