@@ -113,3 +113,52 @@ correctly, correlating 4 failed attempts and producing a single high-severity al
 
 This confirms the custom rule correctly identifies brute-force activity that the 
 default ruleset missed.
+
+## Troubleshooting & Lessons Learned
+
+Building this lab surfaced several real operational issues, debugging them was as 
+valuable a learning experience as the detection work itself.
+
+### 1. Manager startup timeout
+The Wazuh manager initially failed to start, timing out before all daemons came up. 
+Root cause: the VM's limited resources meant startup took longer than systemd's 
+default 90-second limit. 
+**Fix:** added a systemd override increasing `TimeoutStartSec` to 900 seconds.
+
+### 2. Alerts not appearing in the dashboard (Filebeat pipeline gap)
+Alerts were confirmed firing correctly in `/var/ossec/logs/alerts/alerts.log`, but 
+never appeared in the Wazuh dashboard or indexer. 
+
+**Diagnosis process:**
+- Confirmed Filebeat was running and could connect to the indexer (`filebeat test output` passed)
+- Found repeated `"failed to publish events: temporary bulk send failure"` errors in Filebeat's logs
+- Traced this to the indexer blocking all writes due to disk space
+
+### 3. Disk space exhaustion
+The VM's 68GB disk reached 99% usage, triggering OpenSearch's automatic read-only 
+write-block safeguard. Investigation (`du -sh` across `/var`) revealed the cause: 
+a 25GB PostgreSQL database belonging to GVM/OpenVAS (a separate vulnerability scanner 
+pre-installed on Kali, unrelated to this project).
+
+**Fix:** removed GVM entirely, freeing ~25GB, then cleared the indexer's write-block 
+settings and restarted Filebeat. This immediately resolved the pipeline, and the 
+custom rule 100002 alert appeared in the indexer as expected.
+
+**Takeaway:** a SIEM's reliability depends on more than correct rule logic, disk 
+space, resource limits, and pipeline health are just as critical, and are exactly 
+the kind of operational issue a SOC analyst encounters in production.
+
+## Conclusion & Next Steps
+
+This project demonstrated a complete, small-scale detection engineering workflow: 
+simulating an attack, validating default detection, identifying a real gap in the 
+default ruleset, and closing that gap with a custom, MITRE-mapped correlation rule.
+
+**Possible extensions:**
+- Add Active Response to automatically block the attacking IP
+- Extend detection to a second target (e.g., a web server) for a broader attack surface
+- Add File Integrity Monitoring (FIM) as a second detection scenario
+- Explore GVM/OpenVAS separately for a vulnerability-assessment companion project
+
+## Author
+**Raytechcyber** — Cybersecurity student, TS Academy
